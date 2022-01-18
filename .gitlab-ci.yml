@@ -1,0 +1,132 @@
+image: python:3.8.12
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+before_script:
+  - apt-get update
+  - apt-get install -y zip
+  - python -V
+  - pip install virtualenv
+  - virtualenv venv
+  - source venv/bin/activate
+  - pip install poetry
+  - poetry install
+
+stages:
+  - Code Format Checking
+  - Import Order Checking
+  - Static Type Checking
+  - Code style Checking
+  - Doc Style Checking
+  - Spark Jobs Develop Uploading
+  - Spark Libraries Develop Uploading
+  - Spark Jobs QC Uploading
+  - Spark Libraries QC Uploading
+  - Spark Jobs UAT Uploading
+  - Spark Libraries UAT Uploading
+
+Black Checking:
+  stage: Code Format Checking
+  script:
+    - black --check .
+
+Isort Checking:
+  stage: Import Order Checking
+  script:
+    - isort --check .
+
+Mypy Checking:
+  stage: Static Type Checking
+  script:
+    - mypy .
+
+Flake8 Checking:
+  stage: Code style Checking
+  script:
+    - flake8
+
+Pydocstyle Checking:
+  stage: Doc Style Checking
+  script:
+    - pydocstyle
+
+Jobs Develop Uploading:
+  stage: Spark Jobs Develop Uploading
+  script:
+    - dbfs cp -r --overwrite spark_jobs/ dbfs:/spark_jobs/
+  environment:
+    name: develop
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - spark_jobs/**/*
+
+Libraries Develop Uploading:
+  stage: Spark Libraries Develop Uploading
+  script:
+    - cd spark_libs && zip -r ../"$CI_JOB_STARTED_AT".zip * && cd ..
+    - dbfs rm --recursive dbfs:/spark_libs
+    - dbfs cp --overwrite "$CI_JOB_STARTED_AT".zip dbfs:/spark_libs/"$CI_JOB_STARTED_AT".zip
+    - rm -f "$CI_JOB_STARTED_AT".zip
+  environment:
+    name: develop
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - spark_libs/**/*
+
+Jobs QC Uploading:
+  stage: Spark Jobs QC Uploading
+  script:
+    - dbfs cp -r --overwrite spark_jobs/ dbfs:/spark_jobs/
+  environment:
+    name: qc
+  rules:
+    - if: $CI_COMMIT_BRANCH == "qc"
+      changes:
+        - spark_jobs/**/*
+
+Libraries QC Uploading:
+  stage: Spark Libraries QC Uploading
+  script:
+    - cd spark_libs && zip -r ../"$CI_JOB_STARTED_AT".zip * && cd ..
+    - dbfs rm --recursive dbfs:/spark_libs
+    - dbfs cp --overwrite "$CI_JOB_STARTED_AT".zip dbfs:/spark_libs/"$CI_JOB_STARTED_AT".zip
+    - rm -f "$CI_JOB_STARTED_AT".zip
+  environment:
+    name: qc
+  rules:
+    - if: $CI_COMMIT_BRANCH == "qc"
+      changes:
+        - spark_libs/**/*
+
+Jobs UAT Uploading:
+  stage: Spark Jobs UAT Uploading
+  script:
+    - dbfs cp -r --overwrite spark_jobs/ dbfs:/spark_jobs/
+  environment:
+    name: uat
+  rules:
+    - if: $CI_COMMIT_BRANCH == "uat"
+      changes:
+        - spark_jobs/**/*
+
+Libraries UAT Uploading:
+  stage: Spark Libraries UAT Uploading
+  script:
+    - cd spark_libs && zip -r ../"CI_JOB_STARTED_AT".zip * && cd ..
+    - dbfs rm --recursive dbfs:/spark_libs
+    - dbfs cp --overwrite "CI_JOB_STARTED_AT".zip dbfs:/spark_libs/"CI_JOB_STARTED_AT".zip
+    - rm -f "CI_JOB_STARTED_AT".zip
+  environment:
+    name: uat
+  rules:
+    - if: $CI_COMMIT_BRANCH == "uat"
+      changes:
+        - spark_libs/**/*
